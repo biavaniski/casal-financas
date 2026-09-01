@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { signup } from "@/app/actions";
+import { signup } from "@/actions";
 
 export default function SignupPage() {
   const [mode, setMode] = useState("create");
