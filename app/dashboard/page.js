@@ -14,11 +14,12 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
-  ArrowRightLeft,
   Wallet,
   CreditCard,
   Landmark,
   PiggyBank,
+  AlertCircle,
+  Info,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------
@@ -63,8 +64,8 @@ function seedState() {
       { id: "fi2", desc: "Salário Alex", value: 5000 },
     ],
     fixedExpenses: [
-      { id: "fe1", desc: "Aluguel", value: 2200 },
-      { id: "fe2", desc: "Condomínio e Internet", value: 450 },
+      { id: "fe1", desc: "Aluguel", value: 2200, dueDay: 10 },
+      { id: "fe2", desc: "Condomínio e Internet", value: 450, dueDay: 15 },
     ],
     budgets: {
       alimentacao: 1500,
@@ -106,10 +107,10 @@ function seedState() {
       },
     ],
     cards: [
-      { id: "c1", name: "Nubank Ultravioleta", limit: 5000, used: 360 },
+      { id: "c1", name: "Nubank Ultravioleta", limit: 5000, used: 360, dueDay: 15 },
     ],
     installments: [
-      { id: "i1", name: "Notebook", current: 3, total: 10, value: 360 },
+      { id: "i1", name: "Notebook", current: 3, total: 10, value: 360, dueDay: 20 },
     ],
     financing: [
       {
@@ -117,6 +118,7 @@ function seedState() {
         name: "Financiamento do Carro",
         remaining: 28000,
         installmentValue: 976.31,
+        dueDay: 25,
       },
     ],
     savings: [
@@ -152,22 +154,29 @@ export default function DashboardPage() {
   const [newFixedIncVal, setNewFixedIncVal] = useState("");
   const [newFixedExpDesc, setNewFixedExpDesc] = useState("");
   const [newFixedExpVal, setNewFixedExpVal] = useState("");
+  const [newFixedExpDueDay, setNewFixedExpDueDay] = useState("");
 
   // Forms na Aba Mais
   const [newSavDesc, setNewSavDesc] = useState("");
   const [newSavVal, setNewSavVal] = useState("");
+  
   const [newCardName, setNewCardName] = useState("");
   const [newCardUsed, setNewCardUsed] = useState("");
+  const [newCardDueDay, setNewCardDueDay] = useState("");
+
   const [newInstName, setNewInstName] = useState("");
   const [newInstCurr, setNewInstCurr] = useState("");
   const [newInstTot, setNewInstTot] = useState("");
   const [newInstVal, setNewInstVal] = useState("");
+  const [newInstDueDay, setNewInstDueDay] = useState("");
+
   const [newFinName, setNewFinName] = useState("");
   const [newFinRem, setNewFinRem] = useState("");
   const [newFinVal, setNewFinVal] = useState("");
+  const [newFinDueDay, setNewFinDueDay] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("app-financas-v4");
+    const saved = localStorage.getItem("app-financas-v5");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -177,19 +186,19 @@ export default function DashboardPage() {
         const init = seedState();
         setState(init);
         setEditingBudgets(init.budgets);
-        localStorage.setItem("app-financas-v4", JSON.stringify(init));
+        localStorage.setItem("app-financas-v5", JSON.stringify(init));
       }
     } else {
       const init = seedState();
       setState(init);
       setEditingBudgets(init.budgets);
-      localStorage.setItem("app-financas-v4", JSON.stringify(init));
+      localStorage.setItem("app-financas-v5", JSON.stringify(init));
     }
   }, []);
 
   const saveState = (newState) => {
     setState(newState);
-    localStorage.setItem("app-financas-v4", JSON.stringify(newState));
+    localStorage.setItem("app-financas-v5", JSON.stringify(newState));
   };
 
   const handleClearData = () => {
@@ -295,6 +304,7 @@ export default function DashboardPage() {
       id: uid(),
       desc: newFixedExpDesc,
       value: parseFloat(newFixedExpVal),
+      dueDay: parseInt(newFixedExpDueDay) || null,
     };
     saveState({
       ...state,
@@ -302,6 +312,7 @@ export default function DashboardPage() {
     });
     setNewFixedExpDesc("");
     setNewFixedExpVal("");
+    setNewFixedExpDueDay("");
   };
 
   const handleDeleteFixedExpense = (id) => {
@@ -338,10 +349,12 @@ export default function DashboardPage() {
       id: uid(),
       name: newCardName,
       used: parseFloat(newCardUsed),
+      dueDay: parseInt(newCardDueDay) || null,
     };
     saveState({ ...state, cards: [...(state.cards || []), item] });
     setNewCardName("");
     setNewCardUsed("");
+    setNewCardDueDay("");
   };
 
   const handleAddInstallment = (e) => {
@@ -353,6 +366,7 @@ export default function DashboardPage() {
       current: parseInt(newInstCurr) || 1,
       total: parseInt(newInstTot) || 1,
       value: parseFloat(newInstVal),
+      dueDay: parseInt(newInstDueDay) || null,
     };
     saveState({
       ...state,
@@ -362,6 +376,7 @@ export default function DashboardPage() {
     setNewInstCurr("");
     setNewInstTot("");
     setNewInstVal("");
+    setNewInstDueDay("");
   };
 
   const handleAddFinancing = (e) => {
@@ -372,11 +387,13 @@ export default function DashboardPage() {
       name: newFinName,
       remaining: parseFloat(newFinRem),
       installmentValue: parseFloat(newFinVal) || 0,
+      dueDay: parseInt(newFinDueDay) || null,
     };
     saveState({ ...state, financing: [...(state.financing || []), item] });
     setNewFinName("");
     setNewFinRem("");
     setNewFinVal("");
+    setNewFinDueDay("");
   };
 
   /* MÉTRICAS CALCULADAS DO DASHBOARD */
@@ -419,6 +436,58 @@ export default function DashboardPage() {
       0
     );
 
+    // GERADOR DE PONTOS DE ATENÇÃO DINÂMICOS
+    const attentionPoints = [];
+
+    if (overdueExpenses.length > 0) {
+      attentionPoints.push({
+        type: "danger",
+        text: `Atenção: Você tem ${overdueExpenses.length} conta(s) em atraso somando ${brl(
+          overdueExpenses.reduce((s, i) => s + i.value, 0)
+        )}. Priorize a quitação para evitar juros.`,
+      });
+    }
+
+    if (upcomingExpenses > currentBalance && currentBalance > 0) {
+      attentionPoints.push({
+        type: "warning",
+        text: `Cuidados com os gastos: As saídas previstas (${brl(
+          upcomingExpenses
+        )}) superam seu saldo atual em conta (${brl(
+          currentBalance
+        )}). Aguarde novas entradas antes de comprometer o orçamento.`,
+      });
+    } else if (upcomingExpenses > 0 && currentBalance <= 0) {
+      attentionPoints.push({
+        type: "danger",
+        text: `Alerta financeiro: Saldo atual zerado/negativo e saídas pendentes de ${brl(
+          upcomingExpenses
+        )}. Evite compras não essenciais.`,
+      });
+    }
+
+    const totalBudget = Object.values(state.budgets || {}).reduce(
+      (a, b) => a + (Number(b) || 0),
+      0
+    );
+    if (totalBudget > 0 && expensePaid + upcomingExpenses > totalBudget) {
+      attentionPoints.push({
+        type: "warning",
+        text: `Atenção ao Planejamento: O total de despesas do mês (${brl(
+          expensePaid + upcomingExpenses
+        )}) está ultrapassando o teto orçamentário definido (${brl(
+          totalBudget
+        )}).`,
+      });
+    }
+
+    if (attentionPoints.length === 0) {
+      attentionPoints.push({
+        type: "info",
+        text: "Finanças sob controle! As saídas e orçamentos planejados estão dentro da margem para o período atual.",
+      });
+    }
+
     return {
       currentBalance,
       incomeTotal,
@@ -428,6 +497,7 @@ export default function DashboardPage() {
       overdueExpenses,
       topExpenses,
       totalSavings,
+      attentionPoints,
     };
   }, [state]);
 
@@ -510,6 +580,31 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* NOVO: SEÇÃO PONTOS DE ATENÇÃO */}
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-2">
+            <div className="flex items-center gap-2 font-bold text-sm text-gray-800 border-b border-gray-100 pb-2">
+              <AlertCircle size={18} className="text-amber-500" />
+              <span>Pontos de Atenção</span>
+            </div>
+            <div className="space-y-2 pt-1">
+              {fin.attentionPoints.map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-xl text-xs leading-relaxed flex items-start gap-2.5 ${
+                    item.type === "danger"
+                      ? "bg-red-50 text-red-800 border border-red-100"
+                      : item.type === "warning"
+                      ? "bg-amber-50 text-amber-900 border border-amber-100"
+                      : "bg-emerald-50 text-emerald-900 border border-emerald-100"
+                  }`}
+                >
+                  <Info size={16} className="mt-0.5 shrink-0" />
+                  <span>{item.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* ALERTA: CONTAS EM ATRASO */}
           {fin.overdueExpenses.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
@@ -571,7 +666,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 2: LANÇAMENTOS (COM FILTROS E TRANSFERÊNCIAS) */}
+      {/* ABA 2: LANÇAMENTOS */}
       {tab === "lancamentos" && (
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Lançamentos</h1>
@@ -770,7 +865,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 3: PLANEJAMENTO (SALÁRIOS FIXOS + CONTAS FIXAS + ORÇAMENTOS) */}
+      {/* ABA 3: PLANEJAMENTO (SALÁRIOS FIXOS + CONTAS FIXAS COM VENCIMENTO + ORÇAMENTOS) */}
       {tab === "planejamento" && (
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Planejamento</h1>
@@ -829,7 +924,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 2. Contas Fixas */}
+          {/* 2. Contas Fixas com Data de Vencimento */}
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
               <Landmark size={16} className="text-red-600" /> Contas e Despesas
@@ -837,36 +932,51 @@ export default function DashboardPage() {
             </h2>
             <form
               onSubmit={handleAddFixedExpense}
-              className="flex gap-2 text-sm"
+              className="grid grid-cols-3 gap-2 text-sm"
             >
               <input
                 type="text"
                 placeholder="Ex: Aluguel"
                 value={newFixedExpDesc}
                 onChange={(e) => setNewFixedExpDesc(e.target.value)}
-                className="flex-1 p-2 border rounded-xl"
+                className="p-2 border rounded-xl col-span-3"
               />
               <input
                 type="number"
-                placeholder="R$"
+                placeholder="Valor R$"
                 value={newFixedExpVal}
                 onChange={(e) => setNewFixedExpVal(e.target.value)}
-                className="w-24 p-2 border rounded-xl"
+                className="p-2 border rounded-xl col-span-2"
+              />
+              <input
+                type="number"
+                min="1"
+                max="31"
+                placeholder="Dia Venc."
+                value={newFixedExpDueDay}
+                onChange={(e) => setNewFixedExpDueDay(e.target.value)}
+                className="p-2 border rounded-xl text-center"
               />
               <button
                 type="submit"
-                className="p-2 bg-[#1B4332] text-white rounded-xl"
+                className="py-2.5 bg-[#1B4332] text-white rounded-xl font-semibold text-xs col-span-3"
               >
-                <Plus size={16} />
+                + Adicionar Conta Fixa
               </button>
             </form>
-            <div className="space-y-1">
+
+            <div className="space-y-1 pt-2">
               {(state.fixedExpenses || []).map((item) => (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center text-xs py-1 border-b border-gray-100"
+                  className="flex justify-between items-center text-xs py-1.5 border-b border-gray-100"
                 >
-                  <span>{item.desc}</span>
+                  <div>
+                    <div className="font-medium text-gray-800">{item.desc}</div>
+                    <div className="text-gray-400">
+                      {item.dueDay ? `Vence dia ${item.dueDay}` : "Sem vencimento"}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-red-600">
                       {brl(item.value)}
@@ -934,7 +1044,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 4: MAIS (PARCELAMENTOS, FINANCIAMENTOS, CARTÕES, DINHEIRO GUARDADO) */}
+      {/* ABA 4: MAIS (DATAS DE VENCIMENTO EM CARTÕES, PARCELAS E FINANCIAMENTOS) */}
       {tab === "mais" && (
         <div className="p-4 space-y-4">
           <div className="flex justify-between items-center">
@@ -1029,42 +1139,57 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Cartões de Crédito */}
+          {/* Cartões de Crédito (Com Vencimento) */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
               <CreditCard size={16} className="text-blue-600" /> Cartões de
               Crédito
             </h2>
-            <form onSubmit={handleAddCard} className="flex gap-2 text-sm">
+            <form onSubmit={handleAddCard} className="grid grid-cols-3 gap-2 text-sm">
               <input
                 type="text"
                 placeholder="Nome do Cartão"
                 value={newCardName}
                 onChange={(e) => setNewCardName(e.target.value)}
-                className="flex-1 p-2 border rounded-xl"
+                className="p-2 border rounded-xl col-span-3"
               />
               <input
                 type="number"
-                placeholder="Fatura Atual R$"
+                placeholder="Fatura R$"
                 value={newCardUsed}
                 onChange={(e) => setNewCardUsed(e.target.value)}
-                className="w-28 p-2 border rounded-xl"
+                className="p-2 border rounded-xl col-span-2"
+              />
+              <input
+                type="number"
+                min="1"
+                max="31"
+                placeholder="Dia Venc."
+                value={newCardDueDay}
+                onChange={(e) => setNewCardDueDay(e.target.value)}
+                className="p-2 border rounded-xl text-center"
               />
               <button
                 type="submit"
-                className="p-2 bg-[#1B4332] text-white rounded-xl"
+                className="py-2 bg-[#1B4332] text-white rounded-xl font-semibold col-span-3 text-xs"
               >
-                <Plus size={16} />
+                + Adicionar Cartão
               </button>
             </form>
-            <div className="space-y-1">
+
+            <div className="space-y-1 pt-1">
               {(state.cards || []).map((item) => (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center text-xs py-1 border-b border-gray-100"
+                  className="flex justify-between items-center text-xs py-1.5 border-b border-gray-100"
                 >
-                  <span>{item.name}</span>
-                  <span className="font-semibold text-gray-800">
+                  <div>
+                    <div className="font-semibold text-gray-800">{item.name}</div>
+                    <div className="text-gray-400">
+                      {item.dueDay ? `Vencimento fatura: dia ${item.dueDay}` : "Sem dia de vencimento"}
+                    </div>
+                  </div>
+                  <span className="font-bold text-gray-800">
                     {brl(item.used)}
                   </span>
                 </div>
@@ -1072,7 +1197,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Compras Parceladas */}
+          {/* Compras Parceladas (Com Vencimento) */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800">
               Compras Parceladas
@@ -1083,14 +1208,14 @@ export default function DashboardPage() {
             >
               <input
                 type="text"
-                placeholder="Item (Ex: Tv)"
+                placeholder="Item (Ex: Tv 55')"
                 value={newInstName}
                 onChange={(e) => setNewInstName(e.target.value)}
                 className="p-2 border rounded-xl col-span-2"
               />
               <input
                 type="number"
-                placeholder="Parc. Atual / Tot"
+                placeholder="Parc. Atual"
                 value={newInstCurr}
                 onChange={(e) => setNewInstCurr(e.target.value)}
                 className="p-2 border rounded-xl"
@@ -1104,28 +1229,38 @@ export default function DashboardPage() {
               />
               <input
                 type="number"
-                placeholder="Valor da Parcela R$"
+                placeholder="Valor R$/mês"
                 value={newInstVal}
                 onChange={(e) => setNewInstVal(e.target.value)}
-                className="p-2 border rounded-xl col-span-2"
+                className="p-2 border rounded-xl"
+              />
+              <input
+                type="number"
+                min="1"
+                max="31"
+                placeholder="Dia Vencimento"
+                value={newInstDueDay}
+                onChange={(e) => setNewInstDueDay(e.target.value)}
+                className="p-2 border rounded-xl"
               />
               <button
                 type="submit"
-                className="py-2 bg-[#1B4332] text-white rounded-xl font-semibold col-span-2"
+                className="py-2 bg-[#1B4332] text-white rounded-xl font-semibold col-span-2 text-xs"
               >
-                Adicionar Parcelamento
+                + Adicionar Parcelamento
               </button>
             </form>
-            <div className="space-y-1">
+            <div className="space-y-1 pt-1">
               {(state.installments || []).map((item) => (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center text-xs py-1 border-b border-gray-100"
+                  className="flex justify-between items-center text-xs py-1.5 border-b border-gray-100"
                 >
                   <div>
                     <div className="font-medium text-gray-800">{item.name}</div>
                     <div className="text-gray-400">
-                      {item.current}/{item.total}x
+                      Parc. {item.current}/{item.total}
+                      {item.dueDay ? ` • Vence dia ${item.dueDay}` : ""}
                     </div>
                   </div>
                   <span className="font-bold text-gray-800">
@@ -1136,7 +1271,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Financiamentos */}
+          {/* Financiamentos e Empréstimos (Com Vencimento) */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800">
               Financiamentos e Empréstimos
@@ -1152,7 +1287,7 @@ export default function DashboardPage() {
                 onChange={(e) => setNewFinName(e.target.value)}
                 className="w-full p-2 border rounded-xl"
               />
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <input
                   type="number"
                   placeholder="Saldo Devedor R$"
@@ -1162,29 +1297,40 @@ export default function DashboardPage() {
                 />
                 <input
                   type="number"
-                  placeholder="Parcela R$/mês"
+                  placeholder="Parcela R$"
                   value={newFinVal}
                   onChange={(e) => setNewFinVal(e.target.value)}
                   className="p-2 border rounded-xl"
                 />
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="Dia Venc."
+                  value={newFinDueDay}
+                  onChange={(e) => setNewFinDueDay(e.target.value)}
+                  className="p-2 border rounded-xl text-center"
+                />
               </div>
               <button
                 type="submit"
-                className="w-full py-2 bg-[#1B4332] text-white rounded-xl font-semibold"
+                className="w-full py-2 bg-[#1B4332] text-white rounded-xl font-semibold text-xs"
               >
-                Adicionar Financiamento
+                + Adicionar Financiamento
               </button>
             </form>
-            <div className="space-y-1">
+
+            <div className="space-y-1 pt-1">
               {(state.financing || []).map((item) => (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center text-xs py-1 border-b border-gray-100"
+                  className="flex justify-between items-center text-xs py-1.5 border-b border-gray-100"
                 >
                   <div>
                     <div className="font-medium text-gray-800">{item.name}</div>
                     <div className="text-red-500">
-                      Restante: {brl(item.remaining)}
+                      Devedor: {brl(item.remaining)}
+                      {item.dueDay ? ` • Vence dia ${item.dueDay}` : ""}
                     </div>
                   </div>
                   <span className="font-semibold text-gray-800">
@@ -1197,7 +1343,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* BARRA DE NAVEGAÇÃO INFERIOR PÁGINA */}
+      {/* BARRA DE NAVEGAÇÃO INFERIOR */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-6 flex justify-between items-center max-w-md mx-auto z-40">
         <button
           onClick={() => setTab("home")}
