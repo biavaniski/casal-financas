@@ -3,21 +3,32 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Home, ListChecks, Plus, CalendarDays, MoreHorizontal,
-  CreditCard, Check, Trash2, Edit3, X
+  CreditCard, Check, Trash2, Edit3, Sparkles, RefreshCw
 } from "lucide-react";
 
 /* ---------------------------------------------------------------
    UTILITÁRIOS E DADOS INICIAIS
 ------------------------------------------------------------------*/
 const CATS = {
-  moradia: "Moradia",
   alimentacao: "Alimentação",
+  moradia: "Moradia",
   transporte: "Transporte",
-  saude: "Saúde",
   lazer: "Lazer",
   compras: "Compras",
+  saude: "Saúde",
   assinaturas: "Assinaturas",
   outros: "Outros",
+};
+
+const SUGGESTIONS = {
+  alimentacao: 1400,
+  moradia: 2000,
+  transporte: 750,
+  lazer: 450,
+  compras: 500,
+  saude: 400,
+  assinaturas: 150,
+  outros: 300,
 };
 
 const brl = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -26,10 +37,10 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 function seedState() {
   const today = "2026-09-01";
   return {
-    couple: { name: "Beatriz & João", person1: "Beatriz", person2: "João" },
+    couple: { name: "Bia & Alex", person1: "Bia", person2: "Alex" },
     budgets: { alimentacao: 1500, transporte: 800, lazer: 500, compras: 600, moradia: 2200 },
     transactions: [
-      { id: "t1", type: "expense", desc: "Financiamento Carro", cat: "outros", value: 976.31, date: today, person: "Beatriz", paid: false },
+      { id: "t1", type: "expense", desc: "Financiamento Carro", cat: "outros", value: 976.31, date: today, person: "Bia", paid: false },
     ],
     accounts: [
       { name: "Nubank", balance: 3200 },
@@ -57,46 +68,62 @@ function seedState() {
 export default function DashboardPage() {
   const [state, setState] = useState(null);
   const [tab, setTab] = useState("home");
-  const [showAdd, setShowAdd] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
+
+  // Planejamento (edição)
+  const [editingBudgets, setEditingBudgets] = useState({});
 
   // Form Lançamento
   const [type, setType] = useState("expense");
   const [value, setValue] = useState("");
   const [desc, setDesc] = useState("");
   const [cat, setCat] = useState("alimentacao");
-  const [person, setPerson] = useState("Beatriz");
+  const [person, setPerson] = useState("Bia");
   const [date, setDate] = useState("2026-09-01");
   const [paid, setPaid] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("app-state-v2");
+    const saved = localStorage.getItem("app-financas-v3");
     if (saved) {
       try {
-        setState(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        setState(parsed);
+        setEditingBudgets(parsed.budgets || {});
       } catch {
         const init = seedState();
         setState(init);
-        localStorage.setItem("app-state-v2", JSON.stringify(init));
+        setEditingBudgets(init.budgets);
+        localStorage.setItem("app-financas-v3", JSON.stringify(init));
       }
     } else {
       const init = seedState();
       setState(init);
-      localStorage.setItem("app-state-v2", JSON.stringify(init));
+      setEditingBudgets(init.budgets);
+      localStorage.setItem("app-financas-v3", JSON.stringify(init));
     }
   }, []);
 
   const saveState = (newState) => {
     setState(newState);
-    localStorage.setItem("app-state-v2", JSON.stringify(newState));
+    localStorage.setItem("app-financas-v3", JSON.stringify(newState));
   };
 
   const handleClearData = () => {
-    if (confirm("Tem certeza de que deseja limpar todos os dados e restaurar o estado padrão?")) {
-      localStorage.removeItem("app-state-v2");
-      const fresh = seedState();
-      setState(fresh);
+    if (confirm("Deseja zera todos os lançamentos e resetar para o padrão limpo?")) {
+      const emptyState = {
+        couple: { name: "Bia & Alex", person1: "Bia", person2: "Alex" },
+        budgets: { alimentacao: 0, transporte: 0, lazer: 0, compras: 0, moradia: 0 },
+        transactions: [],
+        accounts: [],
+        cards: [],
+        installments: [],
+        subscriptions: [],
+        debts: [],
+        investments: 0,
+      };
+      saveState(emptyState);
+      setEditingBudgets(emptyState.budgets);
     }
   };
 
@@ -107,12 +134,29 @@ export default function DashboardPage() {
       ...state,
       couple: {
         name: tempName,
-        person1: parts[0] || "Pessoa 1",
-        person2: parts[1] || "Pessoa 2",
+        person1: parts[0] || "Bia",
+        person2: parts[1] || "Alex",
       },
     };
     saveState(updated);
     setIsEditingName(false);
+  };
+
+  const handleBudgetChange = (catKey, val) => {
+    const updated = { ...editingBudgets, [catKey]: parseFloat(val) || 0 };
+    setEditingBudgets(updated);
+  };
+
+  const handleSaveBudgets = () => {
+    const updatedState = { ...state, budgets: editingBudgets };
+    saveState(updatedState);
+    alert("Orçamentos atualizados com sucesso!");
+  };
+
+  const handleApplySuggestions = () => {
+    setEditingBudgets(SUGGESTIONS);
+    const updatedState = { ...state, budgets: SUGGESTIONS };
+    saveState(updatedState);
   };
 
   const handleAddTransaction = (e) => {
@@ -126,14 +170,13 @@ export default function DashboardPage() {
       cat,
       value: parseFloat(value),
       date,
-      person,
+      person: person || state.couple.person1,
       paid,
     };
 
     saveState({ ...state, transactions: [newTx, ...state.transactions] });
     setDesc("");
     setValue("");
-    setShowAdd(false);
   };
 
   const togglePaid = (id) => {
@@ -154,10 +197,10 @@ export default function DashboardPage() {
     const balance = income - expense;
 
     const pendingExpense = state.transactions.filter((t) => t.type === "expense" && !t.paid).reduce((s, t) => s + t.value, 0);
-    const totalAccounts = state.accounts.reduce((s, a) => s + a.balance, 0);
-    const totalDebts = state.debts.reduce((s, d) => s + d.remaining, 0);
-    const netWorth = totalAccounts + state.investments - totalDebts;
-    const totalSubscriptions = state.subscriptions.reduce((s, sub) => s + sub.value, 0);
+    const totalAccounts = (state.accounts || []).reduce((s, a) => s + a.balance, 0);
+    const totalDebts = (state.debts || []).reduce((s, d) => s + d.remaining, 0);
+    const netWorth = totalAccounts + (state.investments || 0) - totalDebts;
+    const totalSubscriptions = (state.subscriptions || []).reduce((s, sub) => s + sub.value, 0);
 
     return { income, expense, balance, projectedBalance: balance - pendingExpense, totalAccounts, totalDebts, netWorth, totalSubscriptions };
   }, [state]);
@@ -166,8 +209,9 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen pb-24 max-w-md mx-auto bg-[#F5F6F4] text-gray-800 font-sans">
-      {/* NAVEGAÇÃO SUPERIOR */}
-      <div className="flex justify-between items-center p-4 bg-[#F5F6F4] sticky top-0 z-30">
+      
+      {/* NAVEGAÇÃO ÚNICA (SEM DUPLICAÇÃO NO TOPO) */}
+      <div className="flex justify-between items-center p-4 bg-[#F5F6F4]">
         <div className="flex gap-2">
           <button onClick={() => setTab("home")} className={`px-4 py-1.5 rounded-full text-sm font-semibold transition ${tab === "home" ? "bg-[#1B4332] text-white" : "text-gray-700"}`}>
             Início
@@ -185,9 +229,7 @@ export default function DashboardPage() {
       {tab === "home" && (
         <div className="p-4 space-y-4">
           <div>
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span>{state.couple.name}</span>
-            </div>
+            <div className="text-xs text-gray-500">{state.couple.name}</div>
             <h1 className="text-2xl font-bold text-gray-900 mt-1">Como estamos este mês?</h1>
           </div>
 
@@ -223,7 +265,6 @@ export default function DashboardPage() {
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Lançamentos</h1>
 
-          {/* FORMULÁRIO DE NOVO LANÇAMENTO */}
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800">Novo lançamento</h2>
 
@@ -267,7 +308,6 @@ export default function DashboardPage() {
             </form>
           </div>
 
-          {/* LISTA DE LANÇAMENTOS */}
           <div className="space-y-2">
             {state.transactions.map((t) => (
               <div key={t.id} className="bg-white p-3.5 rounded-2xl border border-gray-200 flex justify-between items-center shadow-sm">
@@ -296,23 +336,43 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 3: PLANEJAMENTO */}
+      {/* ABA 3: PLANEJAMENTO (COM ALTERAÇÃO E SUGESTÃO) */}
       {tab === "planejamento" && (
         <div className="p-4 space-y-4">
-          <h1 className="text-2xl font-bold">Planejamento</h1>
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 space-y-3">
-            <h2 className="font-semibold text-sm text-gray-700">Orçamentos Definidos</h2>
-            {Object.entries(state.budgets).map(([category, limit]) => (
-              <div key={category} className="flex justify-between items-center text-sm border-b pb-2 border-gray-100">
-                <span className="capitalize">{CATS[category] || category}</span>
-                <span className="font-semibold">{brl(limit)}</span>
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold">Planejamento</h1>
+            <button onClick={handleApplySuggestions} className="flex items-center gap-1 text-xs font-semibold text-[#1B4332] bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
+              <Sparkles size={14} /> Sugerir Orçamentos
+            </button>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-gray-200 space-y-3 shadow-sm">
+            <h2 className="font-semibold text-sm text-gray-700">Editar Limites por Categoria</h2>
+            
+            {Object.keys(CATS).map((categoryKey) => (
+              <div key={categoryKey} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                <span className="text-gray-700 font-medium">{CATS[categoryKey]}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">R$</span>
+                  <input
+                    type="number"
+                    value={editingBudgets[categoryKey] !== undefined ? editingBudgets[categoryKey] : ""}
+                    onChange={(e) => handleBudgetChange(categoryKey, e.target.value)}
+                    placeholder="0"
+                    className="w-24 p-1.5 border border-gray-300 rounded-lg text-right text-sm bg-white"
+                  />
+                </div>
               </div>
             ))}
+
+            <button onClick={handleSaveBudgets} className="w-full mt-2 py-2.5 bg-[#1B4332] text-white rounded-xl font-semibold text-sm hover:bg-[#123023] transition">
+              Salvar Alterações do Planejamento
+            </button>
           </div>
         </div>
       )}
 
-      {/* ABA 4: MAIS (PATRIMÔNIO, CARTÕES, CONTAS, ASSINATURAS, DÍVIDAS) */}
+      {/* ABA 4: MAIS */}
       {tab === "mais" && (
         <div className="p-4 space-y-4">
           <div className="flex justify-between items-center">
@@ -327,7 +387,7 @@ export default function DashboardPage() {
             <div className="text-xs text-gray-500 font-medium">Nome do Casal</div>
             {isEditingName ? (
               <div className="flex gap-2">
-                <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} className="flex-1 p-2 border rounded-xl text-sm" placeholder="Ex: Beatriz & João" />
+                <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} className="flex-1 p-2 border rounded-xl text-sm" placeholder="Ex: Bia & Alex" />
                 <button onClick={handleSaveCoupleName} className="p-2 bg-[#1B4332] text-white rounded-xl">
                   <Check size={16} />
                 </button>
@@ -352,7 +412,7 @@ export default function DashboardPage() {
                 <div className="text-gray-400">Em contas</div>
               </div>
               <div>
-                <div className="font-semibold text-gray-800">{brl(state.investments)}</div>
+                <div className="font-semibold text-gray-800">{brl(state.investments || 0)}</div>
                 <div className="text-gray-400">Investido</div>
               </div>
               <div>
@@ -360,89 +420,6 @@ export default function DashboardPage() {
                 <div className="text-gray-400">Dívidas</div>
               </div>
             </div>
-          </div>
-
-          {/* CARTÕES */}
-          <div className="space-y-2">
-            <h2 className="font-bold text-sm text-gray-800">Cartões</h2>
-            {state.cards.map((c, i) => (
-              <div key={i} className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-sm">{c.name}</span>
-                  <CreditCard size={18} className="text-gray-400" />
-                </div>
-                <div className="text-xs text-gray-400">Fecha dia {c.closeDay} • Vence dia {c.dueDay}</div>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full bg-[#2C6E9E]" style={{ width: `${(c.used / (c.used + c.available)) * 100}%` }} />
-                </div>
-                <div className="flex justify-between text-xs text-gray-500 pt-1">
-                  <span>Usado: {brl(c.used)}</span>
-                  <span>Disponível: {brl(c.available)}</span>
-                </div>
-              </div>
-            ))}
-
-            <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-              <div className="text-xs font-semibold text-gray-700 mb-2">Parcelamentos em andamento</div>
-              {state.installments.map((inst, i) => (
-                <div key={i} className="flex justify-between items-center text-xs text-gray-600">
-                  <span>{inst.name}</span>
-                  <span className="font-semibold">{inst.current}/{inst.total} • {brl(inst.value)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* CONTAS BANCÁRIAS */}
-          <div className="space-y-2">
-            <h2 className="font-bold text-sm text-gray-800">Contas bancárias</h2>
-            <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm divide-y divide-gray-100">
-              {state.accounts.map((a, i) => (
-                <div key={i} className="flex justify-between items-center py-2 text-xs">
-                  <span className="font-medium text-gray-700">{a.name}</span>
-                  <span className="font-bold">{brl(a.balance)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between items-center pt-2 text-xs font-bold text-gray-900">
-                <span>Total</span>
-                <span>{brl(fin.totalAccounts)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ASSINATURAS */}
-          <div className="space-y-2">
-            <h2 className="font-bold text-sm text-gray-800">Assinaturas</h2>
-            <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm divide-y divide-gray-100">
-              {state.subscriptions.map((s, i) => (
-                <div key={i} className="flex justify-between items-center py-2 text-xs">
-                  <span className="text-gray-700">{s.name}</span>
-                  <span className="text-gray-500">{brl(s.value)}/mês</span>
-                </div>
-              ))}
-              <div className="flex justify-between items-center pt-2 text-xs font-bold text-gray-900">
-                <span>Total mensal</span>
-                <span>{brl(fin.totalSubscriptions)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* DÍVIDAS E FINANCIAMENTOS */}
-          <div className="space-y-2">
-            <h2 className="font-bold text-sm text-gray-800">Dívidas e financiamentos</h2>
-            {state.debts.map((d, i) => (
-              <div key={i} className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-2">
-                <div className="font-semibold text-sm">{d.name}</div>
-                <div className="text-xs text-gray-400">{d.rate} • parcela {d.installment} • vence dia {d.dueDay}</div>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full bg-[#2C6E9E]" style={{ width: `${(d.paid / (d.paid + d.remaining)) * 100}%` }} />
-                </div>
-                <div className="flex justify-between text-xs text-gray-500 pt-1">
-                  <span>Pago: {brl(d.paid)}</span>
-                  <span>Restante: {brl(d.remaining)}</span>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -457,7 +434,7 @@ export default function DashboardPage() {
           <ListChecks size={20} />
           <span className="text-[10px] font-medium">Lançamentos</span>
         </button>
-        <button onClick={() => { setTab("lancamentos"); }} className="w-12 h-12 bg-[#1B4332] text-white rounded-full flex items-center justify-center -mt-5 shadow-lg active:scale-95 transition-transform">
+        <button onClick={() => setTab("lancamentos")} className="w-12 h-12 bg-[#1B4332] text-white rounded-full flex items-center justify-center -mt-5 shadow-lg active:scale-95 transition-transform">
           <Plus size={24} />
         </button>
         <button onClick={() => setTab("planejamento")} className={`flex flex-col items-center gap-1 ${tab === "planejamento" ? "text-[#1B4332]" : "text-gray-400"}`}>
@@ -469,6 +446,9 @@ export default function DashboardPage() {
           <span className="text-[10px] font-medium">Mais</span>
         </button>
       </div>
+
     </div>
+  );
+}
   );
 }
