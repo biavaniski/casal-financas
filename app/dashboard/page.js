@@ -80,4 +80,26 @@ export default async function Dashboard() {
             <span>{a.name}</span><span className="font-medium">{brl(a.balance)}</span>
           </div>
         ))}
-        <div className="flex justify-between text-sm pt-2 mt-1
+        <div className="flex justify-between text-sm pt-2 mt-1 border-t border-gray-100 font-semibold">
+          <span>Total</span><span>{brl(accountsTotal)}</span>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold">Código de convite do parceiro(a)</div>
+        </div>
+        <div className="text-lg font-mono tracking-widest bg-gray-50 rounded-lg px-3 py-2 text-center">
+          {couple.inviteCode}
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Seu parceiro(a) usa esse código na tela de criar conta, opção "Entrar com código".
+        </p>
+      </div>
+
+      <Link href="/lancamentos" className="block text-center py-3 rounded-xl bg-brand text-white font-semibold">
+        Ver e adicionar lançamentos
+      </Link>
+    </div>
+  );
+}
