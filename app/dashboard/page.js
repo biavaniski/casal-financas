@@ -20,6 +20,7 @@ import {
   PiggyBank,
   AlertCircle,
   Info,
+  Layers,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------
@@ -55,8 +56,10 @@ const brl = (v) =>
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+const getToday = () => new Date().toISOString().split("T")[0];
+
 function seedState() {
-  const today = "2026-09-01";
+  const today = getToday();
   return {
     couple: { name: "Bia & Alex", person1: "Bia", person2: "Alex" },
     fixedIncomes: [
@@ -78,17 +81,7 @@ function seedState() {
       {
         id: "t1",
         type: "expense",
-        desc: "Financiamento Carro",
-        cat: "outros",
-        value: 976.31,
-        date: "2026-08-25",
-        person: "Bia",
-        paid: false,
-      },
-      {
-        id: "t2",
-        type: "expense",
-        desc: "Supermercado",
+        desc: "Supermercado Semanal",
         cat: "alimentacao",
         value: 450.0,
         date: today,
@@ -96,7 +89,7 @@ function seedState() {
         paid: true,
       },
       {
-        id: "t3",
+        id: "t2",
         type: "income",
         desc: "Projeto Freelance",
         cat: "outros",
@@ -144,8 +137,8 @@ export default function DashboardPage() {
   const [value, setValue] = useState("");
   const [desc, setDesc] = useState("");
   const [cat, setCat] = useState("alimentacao");
-  const [person, setPerson] = useState("Bia");
-  const [date, setDate] = useState("2026-09-01");
+  const [person, setPerson] = useState("");
+  const [date, setDate] = useState(getToday());
   const [paid, setPaid] = useState(false);
 
   // Form Planejamento
@@ -159,7 +152,7 @@ export default function DashboardPage() {
   // Forms na Aba Mais
   const [newSavDesc, setNewSavDesc] = useState("");
   const [newSavVal, setNewSavVal] = useState("");
-  
+
   const [newCardName, setNewCardName] = useState("");
   const [newCardUsed, setNewCardUsed] = useState("");
   const [newCardDueDay, setNewCardDueDay] = useState("");
@@ -176,33 +169,40 @@ export default function DashboardPage() {
   const [newFinDueDay, setNewFinDueDay] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("app-financas-v5");
+    const saved = localStorage.getItem("app-financas-v6");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         setState(parsed);
         setEditingBudgets(parsed.budgets || {});
+        setPerson(parsed.couple?.person1 || "Bia");
       } catch {
         const init = seedState();
         setState(init);
         setEditingBudgets(init.budgets);
-        localStorage.setItem("app-financas-v5", JSON.stringify(init));
+        setPerson(init.couple.person1);
+        localStorage.setItem("app-financas-v6", JSON.stringify(init));
       }
     } else {
       const init = seedState();
       setState(init);
       setEditingBudgets(init.budgets);
-      localStorage.setItem("app-financas-v5", JSON.stringify(init));
+      setPerson(init.couple.person1);
+      localStorage.setItem("app-financas-v6", JSON.stringify(init));
     }
   }, []);
 
   const saveState = (newState) => {
     setState(newState);
-    localStorage.setItem("app-financas-v5", JSON.stringify(newState));
+    try {
+      localStorage.setItem("app-financas-v6", JSON.stringify(newState));
+    } catch (e) {
+      console.error("Erro ao salvar dados:", e);
+    }
   };
 
   const handleClearData = () => {
-    if (confirm("Deseja zerar todos os lançamentos e dados de teste?")) {
+    if (confirm("Deseja zerar todos os lançamentos e dados cadastrados?")) {
       const emptyState = {
         couple: { name: "Bia & Alex", person1: "Bia", person2: "Alex" },
         fixedIncomes: [],
@@ -240,47 +240,62 @@ export default function DashboardPage() {
     setIsEditingName(false);
   };
 
-  /* HANDLERS LANÇAMENTOS */
+  /* HANDLER PARA LANÇAMENTOS COM PERSISTÊNCIA CORRIGIDA */
   const handleAddTransaction = (e) => {
     e.preventDefault();
-    if (!desc || !value) return;
+    if (!desc.trim() || !value) return;
+
+    const parsedVal = parseFloat(value.toString().replace(",", "."));
+    if (isNaN(parsedVal) || parsedVal <= 0) {
+      alert("Por favor, informe um valor numérico válido.");
+      return;
+    }
 
     const newTx = {
       id: uid(),
       type,
-      desc,
+      desc: desc.trim(),
       cat,
-      value: parseFloat(value),
-      date,
-      person: person || state.couple.person1,
-      paid,
+      value: parsedVal,
+      date: date || getToday(),
+      person: person || state.couple?.person1 || "Bia",
+      paid: Boolean(paid),
     };
 
-    saveState({ ...state, transactions: [newTx, ...state.transactions] });
+    const updatedTransactions = [newTx, ...(state.transactions || [])];
+    const newState = { ...state, transactions: updatedTransactions };
+
+    saveState(newState);
+
+    // Limpa formulário
     setDesc("");
     setValue("");
+    setPaid(false);
   };
 
   const togglePaid = (id) => {
-    const updated = state.transactions.map((t) =>
+    const updated = (state.transactions || []).map((t) =>
       t.id === id ? { ...t, paid: !t.paid } : t
     );
     saveState({ ...state, transactions: updated });
   };
 
   const deleteTx = (id) => {
-    const updated = state.transactions.filter((t) => t.id !== id);
+    const updated = (state.transactions || []).filter((t) => t.id !== id);
     saveState({ ...state, transactions: updated });
   };
 
   /* HANDLERS PLANEJAMENTO */
   const handleAddFixedIncome = (e) => {
     e.preventDefault();
-    if (!newFixedIncDesc || !newFixedIncVal) return;
+    if (!newFixedIncDesc.trim() || !newFixedIncVal) return;
+    const parsedVal = parseFloat(newFixedIncVal.toString().replace(",", "."));
+    if (isNaN(parsedVal)) return;
+
     const item = {
       id: uid(),
-      desc: newFixedIncDesc,
-      value: parseFloat(newFixedIncVal),
+      desc: newFixedIncDesc.trim(),
+      value: parsedVal,
     };
     saveState({
       ...state,
@@ -293,17 +308,20 @@ export default function DashboardPage() {
   const handleDeleteFixedIncome = (id) => {
     saveState({
       ...state,
-      fixedIncomes: state.fixedIncomes.filter((i) => i.id !== id),
+      fixedIncomes: (state.fixedIncomes || []).filter((i) => i.id !== id),
     });
   };
 
   const handleAddFixedExpense = (e) => {
     e.preventDefault();
-    if (!newFixedExpDesc || !newFixedExpVal) return;
+    if (!newFixedExpDesc.trim() || !newFixedExpVal) return;
+    const parsedVal = parseFloat(newFixedExpVal.toString().replace(",", "."));
+    if (isNaN(parsedVal)) return;
+
     const item = {
       id: uid(),
-      desc: newFixedExpDesc,
-      value: parseFloat(newFixedExpVal),
+      desc: newFixedExpDesc.trim(),
+      value: parsedVal,
       dueDay: parseInt(newFixedExpDueDay) || null,
     };
     saveState({
@@ -318,7 +336,7 @@ export default function DashboardPage() {
   const handleDeleteFixedExpense = (id) => {
     saveState({
       ...state,
-      fixedExpenses: state.fixedExpenses.filter((i) => i.id !== id),
+      fixedExpenses: (state.fixedExpenses || []).filter((i) => i.id !== id),
     });
   };
 
@@ -332,23 +350,36 @@ export default function DashboardPage() {
     alert("Orçamentos salvos com sucesso!");
   };
 
-  /* HANDLERS ABA MAIS */
+  /* HANDLERS ABA MAIS (COM DELETES) */
   const handleAddSavings = (e) => {
     e.preventDefault();
-    if (!newSavDesc || !newSavVal) return;
-    const item = { id: uid(), name: newSavDesc, value: parseFloat(newSavVal) };
+    if (!newSavDesc.trim() || !newSavVal) return;
+    const parsedVal = parseFloat(newSavVal.toString().replace(",", "."));
+    if (isNaN(parsedVal)) return;
+
+    const item = { id: uid(), name: newSavDesc.trim(), value: parsedVal };
     saveState({ ...state, savings: [...(state.savings || []), item] });
     setNewSavDesc("");
     setNewSavVal("");
   };
 
+  const handleDeleteSavings = (id) => {
+    saveState({
+      ...state,
+      savings: (state.savings || []).filter((s) => s.id !== id),
+    });
+  };
+
   const handleAddCard = (e) => {
     e.preventDefault();
-    if (!newCardName || !newCardUsed) return;
+    if (!newCardName.trim() || !newCardUsed) return;
+    const parsedVal = parseFloat(newCardUsed.toString().replace(",", "."));
+    if (isNaN(parsedVal)) return;
+
     const item = {
       id: uid(),
-      name: newCardName,
-      used: parseFloat(newCardUsed),
+      name: newCardName.trim(),
+      used: parsedVal,
       dueDay: parseInt(newCardDueDay) || null,
     };
     saveState({ ...state, cards: [...(state.cards || []), item] });
@@ -357,15 +388,25 @@ export default function DashboardPage() {
     setNewCardDueDay("");
   };
 
+  const handleDeleteCard = (id) => {
+    saveState({
+      ...state,
+      cards: (state.cards || []).filter((c) => c.id !== id),
+    });
+  };
+
   const handleAddInstallment = (e) => {
     e.preventDefault();
-    if (!newInstName || !newInstVal) return;
+    if (!newInstName.trim() || !newInstVal) return;
+    const parsedVal = parseFloat(newInstVal.toString().replace(",", "."));
+    if (isNaN(parsedVal)) return;
+
     const item = {
       id: uid(),
-      name: newInstName,
+      name: newInstName.trim(),
       current: parseInt(newInstCurr) || 1,
       total: parseInt(newInstTot) || 1,
-      value: parseFloat(newInstVal),
+      value: parsedVal,
       dueDay: parseInt(newInstDueDay) || null,
     };
     saveState({
@@ -379,14 +420,25 @@ export default function DashboardPage() {
     setNewInstDueDay("");
   };
 
+  const handleDeleteInstallment = (id) => {
+    saveState({
+      ...state,
+      installments: (state.installments || []).filter((i) => i.id !== id),
+    });
+  };
+
   const handleAddFinancing = (e) => {
     e.preventDefault();
-    if (!newFinName || !newFinRem) return;
+    if (!newFinName.trim() || !newFinRem) return;
+    const parsedRem = parseFloat(newFinRem.toString().replace(",", "."));
+    const parsedVal = parseFloat(newFinVal.toString().replace(",", ".")) || 0;
+    if (isNaN(parsedRem)) return;
+
     const item = {
       id: uid(),
-      name: newFinName,
-      remaining: parseFloat(newFinRem),
-      installmentValue: parseFloat(newFinVal) || 0,
+      name: newFinName.trim(),
+      remaining: parsedRem,
+      installmentValue: parsedVal,
       dueDay: parseInt(newFinDueDay) || null,
     };
     saveState({ ...state, financing: [...(state.financing || []), item] });
@@ -396,106 +448,178 @@ export default function DashboardPage() {
     setNewFinDueDay("");
   };
 
-  /* MÉTRICAS CALCULADAS DO DASHBOARD */
+  const handleDeleteFinancing = (id) => {
+    saveState({
+      ...state,
+      financing: (state.financing || []).filter((f) => f.id !== id),
+    });
+  };
+
+  /* MÉTRICAS UNIFICADAS PARA A TELA DE INÍCIO */
   const fin = useMemo(() => {
     if (!state) return null;
-    const today = new Date().toISOString().split("T")[0];
+    const today = getToday();
 
-    const paidTx = state.transactions.filter((t) => t.paid);
-    const incomeTotal = state.transactions
-      .filter((t) => t.type === "income")
-      .reduce((s, t) => s + t.value, 0);
-    const incomePaid = paidTx
-      .filter((t) => t.type === "income")
-      .reduce((s, t) => s + t.value, 0);
+    const transactions = state.transactions || [];
+    const fixedIncomes = state.fixedIncomes || [];
+    const fixedExpenses = state.fixedExpenses || [];
+    const cards = state.cards || [];
+    const installments = state.installments || [];
+    const financing = state.financing || [];
+    const savings = state.savings || [];
 
-    const expensePaid = paidTx
-      .filter((t) => t.type === "expense")
-      .reduce((s, t) => s + t.value, 0);
-    const currentBalance = incomePaid - expensePaid;
+    // 1. Entradas dos Lançamentos
+    const paidIncomeTx = transactions
+      .filter((t) => t.type === "income" && t.paid)
+      .reduce((s, t) => s + (Number(t.value) || 0), 0);
 
-    // Saídas previstas (gastos não pagos)
-    const upcomingExpenses = state.transactions
+    const pendingIncomeTx = transactions
+      .filter((t) => t.type === "income" && !t.paid)
+      .reduce((s, t) => s + (Number(t.value) || 0), 0);
+
+    // 2. Renda Fixa (Aba Planejamento)
+    const totalFixedIncome = fixedIncomes.reduce(
+      (s, i) => s + (Number(i.value) || 0),
+      0
+    );
+
+    // Total de Renda Prevista no Mês
+    const totalIncomeProjected = paidIncomeTx + pendingIncomeTx + totalFixedIncome;
+
+    // 3. Despesas Pagas dos Lançamentos
+    const paidExpenseTx = transactions
+      .filter((t) => t.type === "expense" && t.paid)
+      .reduce((s, t) => s + (Number(t.value) || 0), 0);
+
+    // 4. Saídas Previstas Integradas das Outras Abas
+    const pendingExpenseTx = transactions
       .filter((t) => t.type === "expense" && !t.paid)
-      .reduce((s, t) => s + t.value, 0);
+      .reduce((s, t) => s + (Number(t.value) || 0), 0);
 
-    // Contas em Atraso (não pagas e com data anterior a hoje)
-    const overdueExpenses = state.transactions.filter(
+    const totalFixedExpenses = fixedExpenses.reduce(
+      (s, i) => s + (Number(i.value) || 0),
+      0
+    );
+
+    const totalCards = cards.reduce(
+      (s, i) => s + (Number(i.used) || 0),
+      0
+    );
+
+    const totalInstallments = installments.reduce(
+      (s, i) => s + (Number(i.value) || 0),
+      0
+    );
+
+    const totalFinancing = financing.reduce(
+      (s, i) => s + (Number(i.installmentValue) || 0),
+      0
+    );
+
+    // Total vindo das Abas Planejamento e Mais
+    const totalPlanningAndMoreExpenses =
+      totalFixedExpenses + totalCards + totalInstallments + totalFinancing;
+
+    // Total Geral de Saídas Previstas Pendentes
+    const totalUpcomingExpenses = pendingExpenseTx + totalPlanningAndMoreExpenses;
+
+    // Total Geral de Despesas Mês (Pagas + Previstas)
+    const totalExpensesAllMonth = paidExpenseTx + totalUpcomingExpenses;
+
+    // Saldo Atual Realizado em Conta
+    const currentBalance = paidIncomeTx - paidExpenseTx;
+
+    // Saldo Projetado para o Fim do Mês
+    const projectedBalance = totalIncomeProjected - totalExpensesAllMonth;
+
+    // Contas em Atraso
+    const overdueExpenses = transactions.filter(
       (t) => t.type === "expense" && !t.paid && t.date < today
     );
 
-    // Maiores Gastos do Mês (todas as despesas ordenadas por valor)
-    const topExpenses = [...state.transactions]
-      .filter((t) => t.type === "expense")
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 4);
-
-    // Dinheiro Guardado Total
-    const totalSavings = (state.savings || []).reduce(
-      (s, item) => s + item.value,
+    // Dinheiro Guardado Total (Aba Mais)
+    const totalSavings = savings.reduce(
+      (s, i) => s + (Number(i.value) || 0),
       0
     );
 
-    // GERADOR DE PONTOS DE ATENÇÃO DINÂMICOS
+    // GERADOR INTELIGENTE DE PONTOS DE ATENÇÃO
     const attentionPoints = [];
 
     if (overdueExpenses.length > 0) {
+      const sumOverdue = overdueExpenses.reduce(
+        (s, i) => s + (Number(i.value) || 0),
+        0
+      );
       attentionPoints.push({
         type: "danger",
-        text: `Atenção: Você tem ${overdueExpenses.length} conta(s) em atraso somando ${brl(
-          overdueExpenses.reduce((s, i) => s + i.value, 0)
-        )}. Priorize a quitação para evitar juros.`,
+        title: "Contas em Atraso",
+        text: `Você possui ${overdueExpenses.length} lançamento(s) em atraso somando ${brl(sumOverdue)}. Priorize a quitação para evitar cobrança de juros.`,
       });
     }
 
-    if (upcomingExpenses > currentBalance && currentBalance > 0) {
+    if (totalExpensesAllMonth > totalIncomeProjected && totalIncomeProjected > 0) {
+      const diff = totalExpensesAllMonth - totalIncomeProjected;
+      attentionPoints.push({
+        type: "danger",
+        title: "Gastos Além do Previsto",
+        text: `Cuidados com os gastos: Suas despesas totais do mês (${brl(
+          totalExpensesAllMonth
+        )}) estão além do previsto e superam sua receita estimada (${brl(
+          totalIncomeProjected
+        )}) em ${brl(diff)}.`,
+      });
+    } else if (totalUpcomingExpenses > currentBalance && currentBalance >= 0) {
       attentionPoints.push({
         type: "warning",
-        text: `Cuidados com os gastos: As saídas previstas (${brl(
-          upcomingExpenses
-        )}) superam seu saldo atual em conta (${brl(
+        title: "Atenção ao Saldo Disponível",
+        text: `Suas saídas e contas previstas (${brl(
+          totalUpcomingExpenses
+        )}) superam o saldo atual disponível em conta (${brl(
           currentBalance
-        )}). Aguarde novas entradas antes de comprometer o orçamento.`,
-      });
-    } else if (upcomingExpenses > 0 && currentBalance <= 0) {
-      attentionPoints.push({
-        type: "danger",
-        text: `Alerta financeiro: Saldo atual zerado/negativo e saídas pendentes de ${brl(
-          upcomingExpenses
-        )}. Evite compras não essenciais.`,
+        )}). Aguarde o recebimento de novas receitas antes de gastar mais.`,
       });
     }
 
-    const totalBudget = Object.values(state.budgets || {}).reduce(
-      (a, b) => a + (Number(b) || 0),
-      0
-    );
-    if (totalBudget > 0 && expensePaid + upcomingExpenses > totalBudget) {
+    const debtTotal = totalCards + totalInstallments + totalFinancing;
+    if (totalFixedIncome > 0 && debtTotal > totalFixedIncome * 0.4) {
+      const perc = Math.round((debtTotal / totalFixedIncome) * 100);
       attentionPoints.push({
         type: "warning",
-        text: `Atenção ao Planejamento: O total de despesas do mês (${brl(
-          expensePaid + upcomingExpenses
-        )}) está ultrapassando o teto orçamentário definido (${brl(
-          totalBudget
-        )}).`,
+        title: "Alerta de Endividamento",
+        text: `Faturas de cartão, parcelas e financiamentos somam ${brl(
+          debtTotal
+        )}, comprometendo ${perc}% da sua renda fixa total.`,
       });
     }
 
     if (attentionPoints.length === 0) {
       attentionPoints.push({
-        type: "info",
-        text: "Finanças sob controle! As saídas e orçamentos planejados estão dentro da margem para o período atual.",
+        type: "success",
+        title: "Finanças Sob Controle",
+        text: `Ótimo trabalho! Seu planejamento e lançamentos estão equilibrados. O saldo estimado para o fim do mês é positivo em ${brl(
+          projectedBalance
+        )}.`,
       });
     }
 
     return {
       currentBalance,
-      incomeTotal,
-      incomePaid,
-      expensePaid,
-      upcomingExpenses,
+      projectedBalance,
+      paidIncomeTx,
+      pendingIncomeTx,
+      totalFixedIncome,
+      totalIncomeProjected,
+      paidExpenseTx,
+      pendingExpenseTx,
+      totalFixedExpenses,
+      totalCards,
+      totalInstallments,
+      totalFinancing,
+      totalPlanningAndMoreExpenses,
+      totalUpcomingExpenses,
+      totalExpensesAllMonth,
       overdueExpenses,
-      topExpenses,
       totalSavings,
       attentionPoints,
     };
@@ -503,8 +627,9 @@ export default function DashboardPage() {
 
   const filteredTransactions = useMemo(() => {
     if (!state) return [];
-    if (txFilter === "all") return state.transactions;
-    return state.transactions.filter((t) => t.type === txFilter);
+    const list = state.transactions || [];
+    if (txFilter === "all") return list;
+    return list.filter((t) => t.type === txFilter);
   }, [state, txFilter]);
 
   if (!state || !fin)
@@ -512,7 +637,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen pb-24 max-w-md mx-auto bg-[#F5F6F4] text-gray-800 font-sans">
-      {/* TOPO SIMPLES (CABEÇALHO ÚNICO) */}
+      {/* CABEÇALHO */}
       <div className="p-4 bg-white border-b border-gray-200 flex justify-between items-center shadow-sm">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
@@ -527,14 +652,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ABA 1: INÍCIO */}
+      {/* ABA 1: INÍCIO (INTEGRADA COM TODAS AS ABAS) */}
       {tab === "home" && (
         <div className="p-4 space-y-4">
-          {/* Card Saldo do Mês */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+          {/* Card Princpal de Saldos */}
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <div className="flex justify-between items-start">
               <div>
-                <div className="text-xs text-gray-500 mb-1">Saldo Atual</div>
+                <div className="text-xs text-gray-500 mb-0.5">
+                  Saldo Disponível Atual
+                </div>
                 <div
                   className={`text-3xl font-bold ${
                     fin.currentBalance >= 0
@@ -546,22 +673,28 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-gray-500">Saídas Previstas</div>
-                <div className="text-base font-semibold text-[#B3261E]">
-                  -{brl(fin.upcomingExpenses)}
+                <div className="text-xs text-gray-500">Saldo Previsto (Fim Mês)</div>
+                <div
+                  className={`text-base font-bold ${
+                    fin.projectedBalance >= 0
+                      ? "text-emerald-700"
+                      : "text-red-600"
+                  }`}
+                >
+                  {brl(fin.projectedBalance)}
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100">
+            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
                   <TrendingUp size={18} />
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Entradas Totais</div>
+                  <div className="text-xs text-gray-500">Renda Total Prevista</div>
                   <div className="text-sm font-semibold text-gray-800">
-                    {brl(fin.incomeTotal)}
+                    {brl(fin.totalIncomeProjected)}
                   </div>
                 </div>
               </div>
@@ -571,16 +704,77 @@ export default function DashboardPage() {
                   <TrendingDown size={18} />
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Despesas Pagas</div>
-                  <div className="text-sm font-semibold text-gray-800">
-                    {brl(fin.expensePaid)}
+                  <div className="text-xs text-gray-500">Saídas Previstas Totais</div>
+                  <div className="text-sm font-semibold text-red-600">
+                    -{brl(fin.totalUpcomingExpenses)}
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* NOVO: SEÇÃO PONTOS DE ATENÇÃO */}
+          {/* NOVO: RESUMO DAS INFORMAÇÕES ABASTECIDAS EM PLANEJAMENTO E MAIS */}
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-2">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <span className="font-bold text-xs text-gray-800 flex items-center gap-1.5 uppercase tracking-wide">
+                <Layers size={15} className="text-emerald-600" />
+                Origem dos Compromissos e Contas
+              </span>
+              <span className="text-[10px] text-gray-400">Visão Geral</span>
+            </div>
+
+            <div className="space-y-1.5 pt-1 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-600">
+                  • Lançamentos Pendentes
+                </span>
+                <span className="font-semibold text-gray-800">
+                  {brl(fin.pendingExpenseTx)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-600">
+                  • Contas Fixas (Planejamento)
+                </span>
+                <span className="font-semibold text-gray-800">
+                  {brl(fin.totalFixedExpenses)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-600">• Faturas Cartão (Mais)</span>
+                <span className="font-semibold text-gray-800">
+                  {brl(fin.totalCards)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-600">• Compras Parceladas (Mais)</span>
+                <span className="font-semibold text-gray-800">
+                  {brl(fin.totalInstallments)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
+                <span className="text-gray-600">
+                  • Financiamentos / Empréstimos (Mais)
+                </span>
+                <span className="font-semibold text-gray-800">
+                  {brl(fin.totalFinancing)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-1.5 bg-emerald-50 px-2 rounded-lg text-emerald-900 font-semibold mt-2">
+                <span className="flex items-center gap-1">
+                  <PiggyBank size={14} /> Dinheiro Guardado / Reserva:
+                </span>
+                <span>{brl(fin.totalSavings)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* PONTOS DE ATENÇÃO DINÂMICOS */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-2">
             <div className="flex items-center gap-2 font-bold text-sm text-gray-800 border-b border-gray-100 pb-2">
               <AlertCircle size={18} className="text-amber-500" />
@@ -592,20 +786,23 @@ export default function DashboardPage() {
                   key={idx}
                   className={`p-3 rounded-xl text-xs leading-relaxed flex items-start gap-2.5 ${
                     item.type === "danger"
-                      ? "bg-red-50 text-red-800 border border-red-100"
+                      ? "bg-red-50 text-red-900 border border-red-100"
                       : item.type === "warning"
                       ? "bg-amber-50 text-amber-900 border border-amber-100"
                       : "bg-emerald-50 text-emerald-900 border border-emerald-100"
                   }`}
                 >
                   <Info size={16} className="mt-0.5 shrink-0" />
-                  <span>{item.text}</span>
+                  <div>
+                    <div className="font-bold mb-0.5">{item.title}</div>
+                    <div>{item.text}</div>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* ALERTA: CONTAS EM ATRASO */}
+          {/* LISTA DE CONTAS EM ATRASO */}
           {fin.overdueExpenses.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
@@ -622,7 +819,7 @@ export default function DashboardPage() {
                       <div className="font-semibold text-gray-800">
                         {tx.desc}
                       </div>
-                      <div className="text-red-500">Vencimento: {tx.date}</div>
+                      <div className="text-red-500">Venceu em: {tx.date}</div>
                     </div>
                     <div className="font-bold text-red-600">
                       {brl(tx.value)}
@@ -632,41 +829,10 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-
-          {/* MAIORES GASTOS */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
-            <h3 className="font-bold text-sm text-gray-800">
-              Maiores Gastos do Mês
-            </h3>
-            {fin.topExpenses.length === 0 ? (
-              <p className="text-xs text-gray-400">Nenhum gasto registrado.</p>
-            ) : (
-              <div className="space-y-2">
-                {fin.topExpenses.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="flex justify-between items-center py-1.5 border-b border-gray-100 last:border-0 text-xs"
-                  >
-                    <div>
-                      <div className="font-medium text-gray-800">
-                        {tx.desc}
-                      </div>
-                      <div className="text-gray-400">
-                        {CATS[tx.cat] || "Geral"} • {tx.person}
-                      </div>
-                    </div>
-                    <div className="font-bold text-[#B3261E]">
-                      {brl(tx.value)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
-      {/* ABA 2: LANÇAMENTOS */}
+      {/* ABA 2: LANÇAMENTOS (CORRIGIDO PARA SALVAR PERFEITAMENTE) */}
       {tab === "lancamentos" && (
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Lançamentos</h1>
@@ -690,9 +856,8 @@ export default function DashboardPage() {
                 </select>
 
                 <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Valor (R$)"
+                  type="text"
+                  placeholder="Valor (Ex: 150,00)"
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   required
@@ -702,7 +867,7 @@ export default function DashboardPage() {
 
               <input
                 type="text"
-                placeholder="Descrição"
+                placeholder="Descrição (Ex: Supermercado)"
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
                 required
@@ -777,7 +942,7 @@ export default function DashboardPage() {
                   : "bg-white border text-gray-600"
               }`}
             >
-              Todos
+              Todos ({state.transactions?.length || 0})
             </button>
             <button
               onClick={() => setTxFilter("income")}
@@ -799,87 +964,88 @@ export default function DashboardPage() {
             >
               Despesas
             </button>
-            <button
-              onClick={() => setTxFilter("transfer")}
-              className={`px-3 py-1.5 rounded-xl font-medium transition ${
-                txFilter === "transfer"
-                  ? "bg-[#1B4332] text-white"
-                  : "bg-white border text-gray-600"
-              }`}
-            >
-              Transferências
-            </button>
           </div>
 
           {/* LISTA DE TRANSAÇÕES */}
           <div className="space-y-2">
-            {filteredTransactions.map((t) => (
-              <div
-                key={t.id}
-                className="bg-white p-3.5 rounded-2xl border border-gray-200 flex justify-between items-center shadow-sm"
-              >
-                <div>
-                  <div className="font-semibold text-sm text-gray-800">
-                    {t.desc}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {CATS[t.cat] || "Geral"} • {t.date} •{" "}
-                    {t.paid ? "pago" : "pendente"}
-                  </div>
-                </div>
-                <div className="text-right flex items-center gap-3">
+            {filteredTransactions.length === 0 ? (
+              <div className="text-center py-6 text-xs text-gray-400 bg-white rounded-2xl border border-gray-200">
+                Nenhum lançamento encontrado.
+              </div>
+            ) : (
+              filteredTransactions.map((t) => (
+                <div
+                  key={t.id}
+                  className="bg-white p-3.5 rounded-2xl border border-gray-200 flex justify-between items-center shadow-sm"
+                >
                   <div>
-                    <div
-                      className={`text-sm font-bold ${
-                        t.type === "income"
-                          ? "text-[#2F8F5B]"
+                    <div className="font-semibold text-sm text-gray-800">
+                      {t.desc}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {CATS[t.cat] || "Geral"} • {t.date} • {t.person} •{" "}
+                      <span
+                        className={
+                          t.paid
+                            ? "text-emerald-600 font-medium"
+                            : "text-amber-600 font-medium"
+                        }
+                      >
+                        {t.paid ? "pago" : "pendente"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      <div
+                        className={`text-sm font-bold ${
+                          t.type === "income"
+                            ? "text-[#2F8F5B]"
+                            : t.type === "expense"
+                            ? "text-[#B3261E]"
+                            : "text-blue-600"
+                        }`}
+                      >
+                        {t.type === "income"
+                          ? "+"
                           : t.type === "expense"
-                          ? "text-[#B3261E]"
-                          : "text-blue-600"
-                      }`}
-                    >
-                      {t.type === "income"
-                        ? "+"
-                        : t.type === "expense"
-                        ? "-"
-                        : "↔ "}
-                      {brl(t.value)}
+                          ? "-"
+                          : "↔ "}
+                        {brl(t.value)}
+                      </div>
+                      <button
+                        onClick={() => togglePaid(t.id)}
+                        className="text-[11px] text-gray-500 underline hover:text-gray-800"
+                      >
+                        {t.paid ? "marcar pendente" : "marcar pago"}
+                      </button>
                     </div>
                     <button
-                      onClick={() => togglePaid(t.id)}
-                      className="text-xs text-gray-500 underline"
+                      onClick={() => deleteTx(t.id)}
+                      className="text-gray-300 hover:text-red-500 p-1"
                     >
-                      {t.paid ? "marcar pendente" : "marcar pago"}
+                      <Trash2 size={16} />
                     </button>
                   </div>
-                  <button
-                    onClick={() => deleteTx(t.id)}
-                    className="text-gray-300 hover:text-red-500"
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
 
-      {/* ABA 3: PLANEJAMENTO (SALÁRIOS FIXOS + CONTAS FIXAS COM VENCIMENTO + ORÇAMENTOS) */}
+      {/* ABA 3: PLANEJAMENTO (SALÁRIOS + CONTAS FIXAS COM VENCIMENTO + ORÇAMENTOS) */}
       {tab === "planejamento" && (
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Planejamento</h1>
 
-          {/* 1. Salários Fixos */}
+          {/* 1. Salários e Rendas Fixas */}
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-              <Wallet size={16} className="text-emerald-600" /> Salários e
-              Rendas Fixas
+              <Wallet size={16} className="text-emerald-600" /> Salários e Rendas
+              Fixas
             </h2>
-            <form
-              onSubmit={handleAddFixedIncome}
-              className="flex gap-2 text-sm"
-            >
+            <form onSubmit={handleAddFixedIncome} className="flex gap-2 text-sm">
               <input
                 type="text"
                 placeholder="Ex: Salário Bia"
@@ -888,7 +1054,7 @@ export default function DashboardPage() {
                 className="flex-1 p-2 border rounded-xl"
               />
               <input
-                type="number"
+                type="text"
                 placeholder="R$"
                 value={newFixedIncVal}
                 onChange={(e) => setNewFixedIncVal(e.target.value)}
@@ -905,7 +1071,7 @@ export default function DashboardPage() {
               {(state.fixedIncomes || []).map((item) => (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center text-xs py-1 border-b border-gray-100"
+                  className="flex justify-between items-center text-xs py-1.5 border-b border-gray-100"
                 >
                   <span>{item.desc}</span>
                   <div className="flex items-center gap-2">
@@ -942,7 +1108,7 @@ export default function DashboardPage() {
                 className="p-2 border rounded-xl col-span-3"
               />
               <input
-                type="number"
+                type="text"
                 placeholder="Valor R$"
                 value={newFixedExpVal}
                 onChange={(e) => setNewFixedExpVal(e.target.value)}
@@ -974,7 +1140,9 @@ export default function DashboardPage() {
                   <div>
                     <div className="font-medium text-gray-800">{item.desc}</div>
                     <div className="text-gray-400">
-                      {item.dueDay ? `Vence dia ${item.dueDay}` : "Sem vencimento"}
+                      {item.dueDay
+                        ? `Vence dia ${item.dueDay}`
+                        : "Sem dia de vencimento"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1044,7 +1212,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 4: MAIS (DATAS DE VENCIMENTO EM CARTÕES, PARCELAS E FINANCIAMENTOS) */}
+      {/* ABA 4: MAIS (CARTÕES, PARCELAS E FINANCIAMENTOS COM VENCIMENTO) */}
       {tab === "mais" && (
         <div className="p-4 space-y-4">
           <div className="flex justify-between items-center">
@@ -1111,7 +1279,7 @@ export default function DashboardPage() {
                 className="flex-1 p-2 border rounded-xl"
               />
               <input
-                type="number"
+                type="text"
                 placeholder="R$"
                 value={newSavVal}
                 onChange={(e) => setNewSavVal(e.target.value)}
@@ -1128,18 +1296,26 @@ export default function DashboardPage() {
               {(state.savings || []).map((item) => (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center text-xs py-1 border-b border-gray-100"
+                  className="flex justify-between items-center text-xs py-1.5 border-b border-gray-100"
                 >
                   <span>{item.name}</span>
-                  <span className="font-bold text-emerald-600">
-                    {brl(item.value)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-emerald-600">
+                      {brl(item.value)}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteSavings(item.id)}
+                      className="text-gray-300 hover:text-red-500"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Cartões de Crédito (Com Vencimento) */}
+          {/* Cartões de Crédito */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
               <CreditCard size={16} className="text-blue-600" /> Cartões de
@@ -1154,7 +1330,7 @@ export default function DashboardPage() {
                 className="p-2 border rounded-xl col-span-3"
               />
               <input
-                type="number"
+                type="text"
                 placeholder="Fatura R$"
                 value={newCardUsed}
                 onChange={(e) => setNewCardUsed(e.target.value)}
@@ -1186,18 +1362,28 @@ export default function DashboardPage() {
                   <div>
                     <div className="font-semibold text-gray-800">{item.name}</div>
                     <div className="text-gray-400">
-                      {item.dueDay ? `Vencimento fatura: dia ${item.dueDay}` : "Sem dia de vencimento"}
+                      {item.dueDay
+                        ? `Vencimento fatura: dia ${item.dueDay}`
+                        : "Sem dia de vencimento"}
                     </div>
                   </div>
-                  <span className="font-bold text-gray-800">
-                    {brl(item.used)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-800">
+                      {brl(item.used)}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteCard(item.id)}
+                      className="text-gray-300 hover:text-red-500"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Compras Parceladas (Com Vencimento) */}
+          {/* Compras Parceladas */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800">
               Compras Parceladas
@@ -1208,7 +1394,7 @@ export default function DashboardPage() {
             >
               <input
                 type="text"
-                placeholder="Item (Ex: Tv 55')"
+                placeholder="Item (Ex: TV 55')"
                 value={newInstName}
                 onChange={(e) => setNewInstName(e.target.value)}
                 className="p-2 border rounded-xl col-span-2"
@@ -1228,7 +1414,7 @@ export default function DashboardPage() {
                 className="p-2 border rounded-xl"
               />
               <input
-                type="number"
+                type="text"
                 placeholder="Valor R$/mês"
                 value={newInstVal}
                 onChange={(e) => setNewInstVal(e.target.value)}
@@ -1250,6 +1436,7 @@ export default function DashboardPage() {
                 + Adicionar Parcelamento
               </button>
             </form>
+
             <div className="space-y-1 pt-1">
               {(state.installments || []).map((item) => (
                 <div
@@ -1263,23 +1450,28 @@ export default function DashboardPage() {
                       {item.dueDay ? ` • Vence dia ${item.dueDay}` : ""}
                     </div>
                   </div>
-                  <span className="font-bold text-gray-800">
-                    {brl(item.value)}/mês
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-800">
+                      {brl(item.value)}/mês
+                    </span>
+                    <button
+                      onClick={() => handleDeleteInstallment(item.id)}
+                      className="text-gray-300 hover:text-red-500"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Financiamentos e Empréstimos (Com Vencimento) */}
+          {/* Financiamentos e Empréstimos */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800">
               Financiamentos e Empréstimos
             </h2>
-            <form
-              onSubmit={handleAddFinancing}
-              className="space-y-2 text-sm"
-            >
+            <form onSubmit={handleAddFinancing} className="space-y-2 text-sm">
               <input
                 type="text"
                 placeholder="Nome do Financiamento"
@@ -1289,14 +1481,14 @@ export default function DashboardPage() {
               />
               <div className="grid grid-cols-3 gap-2">
                 <input
-                  type="number"
+                  type="text"
                   placeholder="Saldo Devedor R$"
                   value={newFinRem}
                   onChange={(e) => setNewFinRem(e.target.value)}
                   className="p-2 border rounded-xl"
                 />
                 <input
-                  type="number"
+                  type="text"
                   placeholder="Parcela R$"
                   value={newFinVal}
                   onChange={(e) => setNewFinVal(e.target.value)}
@@ -1333,9 +1525,17 @@ export default function DashboardPage() {
                       {item.dueDay ? ` • Vence dia ${item.dueDay}` : ""}
                     </div>
                   </div>
-                  <span className="font-semibold text-gray-800">
-                    {brl(item.installmentValue)}/mês
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-800">
+                      {brl(item.installmentValue)}/mês
+                    </span>
+                    <button
+                      onClick={() => handleDeleteFinancing(item.id)}
+                      className="text-gray-300 hover:text-red-500"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
