@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Info,
   Layers,
+  ArrowRightCircle,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------
@@ -240,6 +241,23 @@ export default function DashboardPage() {
     setIsEditingName(false);
   };
 
+  /* FUNÇÃO PARA CONVERTER ITEM DE OUTRAS ABAS EM UM LANÇAMENTO REAL */
+  const convertToTransaction = (itemDesc, itemVal, itemType = "expense", category = "outros") => {
+    const newTx = {
+      id: uid(),
+      type: itemType,
+      desc: itemDesc,
+      cat: category,
+      value: itemVal,
+      date: getToday(),
+      person: state.couple?.person1 || "Bia",
+      paid: true,
+    };
+    const updatedTransactions = [newTx, ...(state.transactions || [])];
+    saveState({ ...state, transactions: updatedTransactions });
+    alert(`"${itemDesc}" foi adicionado aos Lançamentos como Pago!`);
+  };
+
   /* HANDLER PARA LANÇAMENTOS COM PERSISTÊNCIA CORRIGIDA */
   const handleAddTransaction = (e) => {
     e.preventDefault();
@@ -350,7 +368,7 @@ export default function DashboardPage() {
     alert("Orçamentos salvos com sucesso!");
   };
 
-  /* HANDLERS ABA MAIS (COM DELETES) */
+  /* HANDLERS ABA MAIS */
   const handleAddSavings = (e) => {
     e.preventDefault();
     if (!newSavDesc.trim() || !newSavVal) return;
@@ -455,7 +473,7 @@ export default function DashboardPage() {
     });
   };
 
-  /* MÉTRICAS UNIFICADAS PARA A TELA DE INÍCIO */
+  /* MÉTRICAS UNIFICADAS E INTEGRADAS PARA A TELA DE INÍCIO */
   const fin = useMemo(() => {
     if (!state) return null;
     const today = getToday();
@@ -468,7 +486,7 @@ export default function DashboardPage() {
     const financing = state.financing || [];
     const savings = state.savings || [];
 
-    // 1. Entradas dos Lançamentos
+    // 1. Entradas Lançadas
     const paidIncomeTx = transactions
       .filter((t) => t.type === "income" && t.paid)
       .reduce((s, t) => s + (Number(t.value) || 0), 0);
@@ -477,7 +495,7 @@ export default function DashboardPage() {
       .filter((t) => t.type === "income" && !t.paid)
       .reduce((s, t) => s + (Number(t.value) || 0), 0);
 
-    // 2. Renda Fixa (Aba Planejamento)
+    // 2. Renda Fixa (Planejamento)
     const totalFixedIncome = fixedIncomes.reduce(
       (s, i) => s + (Number(i.value) || 0),
       0
@@ -491,7 +509,7 @@ export default function DashboardPage() {
       .filter((t) => t.type === "expense" && t.paid)
       .reduce((s, t) => s + (Number(t.value) || 0), 0);
 
-    // 4. Saídas Previstas Integradas das Outras Abas
+    // 4. Saídas Integradas das Outras Abas (Planejamento + Mais)
     const pendingExpenseTx = transactions
       .filter((t) => t.type === "expense" && !t.paid)
       .reduce((s, t) => s + (Number(t.value) || 0), 0);
@@ -516,17 +534,17 @@ export default function DashboardPage() {
       0
     );
 
-    // Total vindo das Abas Planejamento e Mais
+    // Soma total vinda de Planejamento + Mais
     const totalPlanningAndMoreExpenses =
       totalFixedExpenses + totalCards + totalInstallments + totalFinancing;
 
-    // Total Geral de Saídas Previstas Pendentes
+    // Total de Saídas Futuras/Pendentes
     const totalUpcomingExpenses = pendingExpenseTx + totalPlanningAndMoreExpenses;
 
     // Total Geral de Despesas Mês (Pagas + Previstas)
     const totalExpensesAllMonth = paidExpenseTx + totalUpcomingExpenses;
 
-    // Saldo Atual Realizado em Conta
+    // Saldo Atual Realizado em Conta (PAGO)
     const currentBalance = paidIncomeTx - paidExpenseTx;
 
     // Saldo Projetado para o Fim do Mês
@@ -537,13 +555,13 @@ export default function DashboardPage() {
       (t) => t.type === "expense" && !t.paid && t.date < today
     );
 
-    // Dinheiro Guardado Total (Aba Mais)
+    // Dinheiro Guardado Total (Reserva da Aba Mais)
     const totalSavings = savings.reduce(
       (s, i) => s + (Number(i.value) || 0),
       0
     );
 
-    // GERADOR INTELIGENTE DE PONTOS DE ATENÇÃO
+    // PONTOS DE ATENÇÃO DINÂMICOS
     const attentionPoints = [];
 
     if (overdueExpenses.length > 0) {
@@ -563,9 +581,9 @@ export default function DashboardPage() {
       attentionPoints.push({
         type: "danger",
         title: "Gastos Além do Previsto",
-        text: `Cuidados com os gastos: Suas despesas totais do mês (${brl(
+        text: `Suas despesas totais (${brl(
           totalExpensesAllMonth
-        )}) estão além do previsto e superam sua receita estimada (${brl(
+        )}) superam a receita estimada (${brl(
           totalIncomeProjected
         )}) em ${brl(diff)}.`,
       });
@@ -575,9 +593,9 @@ export default function DashboardPage() {
         title: "Atenção ao Saldo Disponível",
         text: `Suas saídas e contas previstas (${brl(
           totalUpcomingExpenses
-        )}) superam o saldo atual disponível em conta (${brl(
+        )}) superam o saldo atual em conta (${brl(
           currentBalance
-        )}). Aguarde o recebimento de novas receitas antes de gastar mais.`,
+        )}).`,
       });
     }
 
@@ -587,9 +605,9 @@ export default function DashboardPage() {
       attentionPoints.push({
         type: "warning",
         title: "Alerta de Endividamento",
-        text: `Faturas de cartão, parcelas e financiamentos somam ${brl(
+        text: `Cartões, parcelas e financiamentos somam ${brl(
           debtTotal
-        )}, comprometendo ${perc}% da sua renda fixa total.`,
+        )}, comprometendo ${perc}% da renda fixa total.`,
       });
     }
 
@@ -597,7 +615,7 @@ export default function DashboardPage() {
       attentionPoints.push({
         type: "success",
         title: "Finanças Sob Controle",
-        text: `Ótimo trabalho! Seu planejamento e lançamentos estão equilibrados. O saldo estimado para o fim do mês é positivo em ${brl(
+        text: `Tudo equilibrado! O saldo estimado para o fim do mês é de ${brl(
           projectedBalance
         )}.`,
       });
@@ -655,12 +673,12 @@ export default function DashboardPage() {
       {/* ABA 1: INÍCIO (INTEGRADA COM TODAS AS ABAS) */}
       {tab === "home" && (
         <div className="p-4 space-y-4">
-          {/* Card Princpal de Saldos */}
+          {/* Card Principal de Saldos */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-3">
             <div className="flex justify-between items-start">
               <div>
                 <div className="text-xs text-gray-500 mb-0.5">
-                  Saldo Disponível Atual
+                  Saldo Realizado Atual
                 </div>
                 <div
                   className={`text-3xl font-bold ${
@@ -713,7 +731,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* NOVO: RESUMO DAS INFORMAÇÕES ABASTECIDAS EM PLANEJAMENTO E MAIS */}
+          {/* RESUMO DAS INFORMAÇÕES SALVAS NAS DEMAIS ABAS */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm space-y-2">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <span className="font-bold text-xs text-gray-800 flex items-center gap-1.5 uppercase tracking-wide">
@@ -725,18 +743,14 @@ export default function DashboardPage() {
 
             <div className="space-y-1.5 pt-1 text-xs">
               <div className="flex justify-between items-center py-1 border-b border-gray-50">
-                <span className="text-gray-600">
-                  • Lançamentos Pendentes
-                </span>
+                <span className="text-gray-600">• Lançamentos Pendentes</span>
                 <span className="font-semibold text-gray-800">
                   {brl(fin.pendingExpenseTx)}
                 </span>
               </div>
 
               <div className="flex justify-between items-center py-1 border-b border-gray-50">
-                <span className="text-gray-600">
-                  • Contas Fixas (Planejamento)
-                </span>
+                <span className="text-gray-600">• Contas Fixas (Planejamento)</span>
                 <span className="font-semibold text-gray-800">
                   {brl(fin.totalFixedExpenses)}
                 </span>
@@ -757,9 +771,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex justify-between items-center py-1 border-b border-gray-50">
-                <span className="text-gray-600">
-                  • Financiamentos / Empréstimos (Mais)
-                </span>
+                <span className="text-gray-600">• Financiamentos (Mais)</span>
                 <span className="font-semibold text-gray-800">
                   {brl(fin.totalFinancing)}
                 </span>
@@ -832,7 +844,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 2: LANÇAMENTOS (CORRIGIDO PARA SALVAR PERFEITAMENTE) */}
+      {/* ABA 2: LANÇAMENTOS */}
       {tab === "lancamentos" && (
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Lançamentos</h1>
@@ -1034,7 +1046,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 3: PLANEJAMENTO (SALÁRIOS + CONTAS FIXAS COM VENCIMENTO + ORÇAMENTOS) */}
+      {/* ABA 3: PLANEJAMENTO */}
       {tab === "planejamento" && (
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Planejamento</h1>
@@ -1042,8 +1054,7 @@ export default function DashboardPage() {
           {/* 1. Salários e Rendas Fixas */}
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-              <Wallet size={16} className="text-emerald-600" /> Salários e Rendas
-              Fixas
+              <Wallet size={16} className="text-emerald-600" /> Salários e Rendas Fixas
             </h2>
             <form onSubmit={handleAddFixedIncome} className="flex gap-2 text-sm">
               <input
@@ -1079,6 +1090,13 @@ export default function DashboardPage() {
                       {brl(item.value)}
                     </span>
                     <button
+                      title="Lançar como receita paga"
+                      onClick={() => convertToTransaction(item.desc, item.value, "income", "outros")}
+                      className="text-emerald-600 hover:text-emerald-800 p-1"
+                    >
+                      <ArrowRightCircle size={15} />
+                    </button>
+                    <button
                       onClick={() => handleDeleteFixedIncome(item.id)}
                       className="text-gray-300 hover:text-red-500"
                     >
@@ -1093,8 +1111,7 @@ export default function DashboardPage() {
           {/* 2. Contas Fixas com Data de Vencimento */}
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
             <h2 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-              <Landmark size={16} className="text-red-600" /> Contas e Despesas
-              Fixas
+              <Landmark size={16} className="text-red-600" /> Contas e Despesas Fixas
             </h2>
             <form
               onSubmit={handleAddFixedExpense}
@@ -1149,6 +1166,13 @@ export default function DashboardPage() {
                     <span className="font-semibold text-red-600">
                       {brl(item.value)}
                     </span>
+                    <button
+                      title="Lançar como despesa paga"
+                      onClick={() => convertToTransaction(item.desc, item.value, "expense", "moradia")}
+                      className="text-emerald-600 hover:text-emerald-800 p-1"
+                    >
+                      <ArrowRightCircle size={15} />
+                    </button>
                     <button
                       onClick={() => handleDeleteFixedExpense(item.id)}
                       className="text-gray-300 hover:text-red-500"
@@ -1212,7 +1236,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ABA 4: MAIS (CARTÕES, PARCELAS E FINANCIAMENTOS COM VENCIMENTO) */}
+      {/* ABA 4: MAIS */}
       {tab === "mais" && (
         <div className="p-4 space-y-4">
           <div className="flex justify-between items-center">
@@ -1372,6 +1396,13 @@ export default function DashboardPage() {
                       {brl(item.used)}
                     </span>
                     <button
+                      title="Lançar fatura paga"
+                      onClick={() => convertToTransaction(`Fatura ${item.name}`, item.used, "expense", "outros")}
+                      className="text-emerald-600 hover:text-emerald-800 p-1"
+                    >
+                      <ArrowRightCircle size={15} />
+                    </button>
+                    <button
                       onClick={() => handleDeleteCard(item.id)}
                       className="text-gray-300 hover:text-red-500"
                     >
@@ -1455,6 +1486,13 @@ export default function DashboardPage() {
                       {brl(item.value)}/mês
                     </span>
                     <button
+                      title="Lançar parcela paga"
+                      onClick={() => convertToTransaction(`Parcela ${item.name} (${item.current}/${item.total})`, item.value, "expense", "compras")}
+                      className="text-emerald-600 hover:text-emerald-800 p-1"
+                    >
+                      <ArrowRightCircle size={15} />
+                    </button>
+                    <button
                       onClick={() => handleDeleteInstallment(item.id)}
                       className="text-gray-300 hover:text-red-500"
                     >
@@ -1529,6 +1567,13 @@ export default function DashboardPage() {
                     <span className="font-semibold text-gray-800">
                       {brl(item.installmentValue)}/mês
                     </span>
+                    <button
+                      title="Lançar parcela paga"
+                      onClick={() => convertToTransaction(`Financiamento ${item.name}`, item.installmentValue, "expense", "outros")}
+                      className="text-emerald-600 hover:text-emerald-800 p-1"
+                    >
+                      <ArrowRightCircle size={15} />
+                    </button>
                     <button
                       onClick={() => handleDeleteFinancing(item.id)}
                       className="text-gray-300 hover:text-red-500"
