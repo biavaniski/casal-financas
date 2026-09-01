@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  coupleId  String?
+  couple    Couple?  @relation(fields: [coupleId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Couple {
+  id           String        @id @default(cuid())
+  name         String
+  inviteCode   String        @unique
+  users        User[]
+  accounts     Account[]
+  cards        CreditCard[]
+  categories   Category[]
+  transactions Transaction[]
+  budgets      Budget[]
+  goals        Goal[]
+  createdAt    DateTime      @default(now())
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  coupleId     String
+  couple       Couple        @relation(fields: [coupleId], references: [id])
+  name         String
+  balance      Float         @default(0)
+  transactions Transaction[]
+}
+
+model CreditCard {
+  id           String        @id @default(cuid())
+  coupleId     String
+  couple       Couple        @relation(fields: [coupleId], references: [id])
+  name         String
+  limit        Float
+  closingDay   Int
+  dueDay       Int
+  transactions Transaction[]
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  coupleId     String
+  couple       Couple        @relation(fields: [coupleId], references: [id])
+  name         String
+  type         String
+  color        String?
+  transactions Transaction[]
+  budgets      Budget[]
+}
+
+model Transaction {
+  id          String      @id @default(cuid())
+  coupleId    String
+  couple      Couple      @relation(fields: [coupleId], references: [id])
+  type        String
+  description String
+  value       Float
+  date        DateTime
+  paid        Boolean     @default(true)
+  personId    String
+  recurring   Boolean     @default(false)
+  categoryId  String?
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  accountId   String?
+  account     Account?    @relation(fields: [accountId], references: [id])
+  cardId      String?
+  card        CreditCard? @relation(fields: [cardId], references: [id])
+  createdAt   DateTime    @default(now())
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  coupleId   String
+  couple     Couple   @relation(fields: [coupleId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  limit      Float
+}
+
+model Goal {
+  id       String    @id @default(cuid())
+  coupleId String
+  couple   Couple    @relation(fields: [coupleId], references: [id])
+  name     String
+  target   Float
+  saved    Float     @default(0)
+  dueDate  DateTime?
+}
