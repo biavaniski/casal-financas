@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { addTransaction, togglePaid } from "@/app/actions";
+import { addTransaction, togglePaid } from "@/actions";
 
 function brl(v) {
   return (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
