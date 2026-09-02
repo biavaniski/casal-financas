@@ -25,7 +25,7 @@ export default function Nav() {
         {link("/lancamentos", "Lançamentos")}
       </div>
       <button
-        onClick={() => signOut({ callbackUrl: "/login" })}
+        onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
         className="text-sm font-medium text-gray-500 hover:text-gray-800"
       >
         Sair
