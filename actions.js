@@ -61,6 +61,9 @@ export async function signup(formData) {
 
 export async function addTransaction(formData) {
   const session = await getServerSession(authOptions);
+  if (!session || !session.user) {
+    throw new Error("Não autorizado.");
+  }
   const coupleId = session.user.coupleId;
 
   const type = formData.get("type");
@@ -101,7 +104,17 @@ export async function addTransaction(formData) {
 }
 
 export async function togglePaid(id) {
-  const transaction = await prisma.transaction.findUnique({ where: { id } });
+  // Validação de sessão adicionada aqui para segurança no servidor
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user) {
+    throw new Error("Não autorizado.");
+  }
+  const coupleId = session.user.coupleId;
+
+  // Garante que a transação pertence ao casal do usuário logado
+  const transaction = await prisma.transaction.findFirst({
+    where: { id, coupleId },
+  });
   if (!transaction) throw new Error("Lançamento não encontrado.");
 
   const newPaid = !transaction.paid;
