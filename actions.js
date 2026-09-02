@@ -33,7 +33,6 @@ export async function signup(formData) {
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-
   let coupleId;
 
   if (mode === "create") {
@@ -62,12 +61,11 @@ export async function signup(formData) {
 
 export async function addTransaction(formData) {
   const session = await getServerSession(authOptions);
-  if (!session || !session.user) {
-    throw new Error("Não autorizado.");
+  if (!session || !session.user || !session.user.coupleId) {
+    throw new Error("Não autorizado ou usuário sem casal vinculado.");
   }
   const coupleId = session.user.coupleId;
 
-  // Proteção de Rate Limit (máximo de 30 requisições por minuto por casal)
   if (!checkRateLimit(coupleId, 30, 60000)) {
     throw new Error("Muitas requisições em pouco tempo. Aguarde um momento.");
   }
@@ -90,19 +88,25 @@ export async function addTransaction(formData) {
       value,
       date: new Date(date),
       paid,
-      personId,
+      personId: personId || "1",
       categoryId: categoryId || undefined,
       accountId: accountId || undefined,
     },
   });
 
   if (paid && accountId) {
-    await prisma.account.update({
-      where: { id: accountId },
-      data: {
-        balance: { increment: type === "income" ? value : -value },
-      },
+    const account = await prisma.account.findFirst({
+      where: { id: accountId, coupleId },
     });
+    
+    if (account) {
+      await prisma.account.update({
+        where: { id: accountId },
+        data: {
+          balance: { increment: type === "income" ? value : -value },
+        },
+      });
+    }
   }
 
   revalidatePath("/lancamentos");
@@ -111,7 +115,7 @@ export async function addTransaction(formData) {
 
 export async function togglePaid(id) {
   const session = await getServerSession(authOptions);
-  if (!session || !session.user) {
+  if (!session || !session.user || !session.user.coupleId) {
     throw new Error("Não autorizado.");
   }
   const coupleId = session.user.coupleId;
@@ -129,11 +133,17 @@ export async function togglePaid(id) {
   });
 
   if (transaction.accountId) {
-    const delta = transaction.type === "income" ? transaction.value : -transaction.value;
-    await prisma.account.update({
-      where: { id: transaction.accountId },
-      data: { balance: { increment: newPaid ? delta : -delta } },
+    const account = await prisma.account.findFirst({
+      where: { id: transaction.accountId, coupleId },
     });
+
+    if (account) {
+      const delta = transaction.type === "income" ? transaction.value : -transaction.value;
+      await prisma.account.update({
+        where: { id: transaction.accountId },
+        data: { balance: { increment: newPaid ? delta : -delta } },
+      });
+    }
   }
 
   revalidatePath("/lancamentos");
