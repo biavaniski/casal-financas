@@ -109,8 +109,8 @@ export async function addTransaction(formData) {
     }
   }
 
-  revalidatePath("/lancamentos");
-  revalidatePath("/dashboard");
+  revalidatePath("/lancamentos", "layout");
+  revalidatePath("/dashboard", "layout");
 }
 
 export async function togglePaid(id) {
@@ -146,6 +146,6 @@ export async function togglePaid(id) {
     }
   }
 
-  revalidatePath("/lancamentos");
-  revalidatePath("/dashboard");
+  revalidatePath("/lancamentos", "layout");
+  revalidatePath("/dashboard", "layout");
 }
