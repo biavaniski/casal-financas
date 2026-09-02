@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 function generateInviteCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -66,6 +67,11 @@ export async function addTransaction(formData) {
   }
   const coupleId = session.user.coupleId;
 
+  // Proteção de Rate Limit (máximo de 30 requisições por minuto por casal)
+  if (!checkRateLimit(coupleId, 30, 60000)) {
+    throw new Error("Muitas requisições em pouco tempo. Aguarde um momento.");
+  }
+
   const type = formData.get("type");
   const rawValue = formData.get("value") || "0";
   const value = parseFloat(String(rawValue).replace(",", "."));
@@ -104,14 +110,12 @@ export async function addTransaction(formData) {
 }
 
 export async function togglePaid(id) {
-  // Validação de sessão adicionada aqui para segurança no servidor
   const session = await getServerSession(authOptions);
   if (!session || !session.user) {
     throw new Error("Não autorizado.");
   }
   const coupleId = session.user.coupleId;
 
-  // Garante que a transação pertence ao casal do usuário logado
   const transaction = await prisma.transaction.findFirst({
     where: { id, coupleId },
   });
